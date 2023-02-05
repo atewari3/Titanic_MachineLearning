@@ -1,0 +1,215 @@
+---
+title: "🚢Titanic project🚢"
+author: "Aditya Tewari"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/aditewari/Desktop/R-for-Data-Science-and-Machine-Learning/Machine Learning with R")
+library(tidyverse)
+```
+
+### Import Data
+The purpose of this project is too see if machine learning could be used to predict if a passenger survived or did not survive on the Titanic. It will use a logistic regression model bc wither a passenger survived or did not. There really is not a in between. The project will demonstrate how to identify missing data, clean data, visualize data,create a train/test split, and apply a machine learning model.
+$$\\[0.01in]$$
+Lets first create our dataframe based on csv files by reading them in
+```{r}
+df.train <- read.csv("/Users/aditewari/Desktop/R-for-Data-Science-and-Machine-Learning/Machine Learning with R/titanic_train.csv")
+head(df.train)
+```
+$$\\[0.01in]$$
+We notice that we have the PassengerId if they were first,second,or third class. If they had siblings or spouses on board. If they had parent or children on board. If there was a Fare. What their ticket number was etc. 
+$$\\[0.01in]$$
+### Explore the Data
+```{r}
+library(Amelia)
+missmap(df.train,main = "Titanic_training_data missing info",col=c("yellow","black"),legend=FALSE)
+```
+The Amelia package maps out where there are missing values and plots them graphically. Yellow indicates the missing values and black indicates normal values. We see that there are a lot of missing values based off the Age. We should find some way to fill those values rather than just get rid of all the data associated with those values
+$$\\[0.01in]$$
+However, before we address the issue at hand lets look just visualize some data for our purposes
+$$\\[0.01in]$$
+
+### Data visualization
+Lets see how many people survived vs didn't survive
+```{r}
+pl <- ggplot(df.train) + aes(x=Survived)
+
+pl2 <- pl + geom_bar(aes(fill=factor(Survived)))
+
+print(pl2)
+```
+It seems that more people survived than didn't survive. We know this bc 0 indicates survived. Next lets look at how many people were in each particular class
+$$\\[0.01in]$$
+```{r}
+pl <- ggplot(df.train) + aes(x=Pclass)
+
+pl2 <- pl + geom_bar(aes(fill=factor(Pclass)))
+
+print(pl2)
+```
+Most people in the titanic were on the third class but surprisingly we had more first class passengers than second class passengers. Lets see if there were more men or women on board
+$$\\[0.01in]$$
+```{r}
+pl <- ggplot(df.train) + aes(x=Sex)
+
+pl2 <- pl + geom_bar(aes(fill=factor(Sex)))
+
+pl2
+```
+There seems to be nearly twice as many men compared to women on board.Next lets look at age
+$$\\[0.01in]$$
+```{r}
+pl <- ggplot(df.train) + aes(x=Age)
+
+pl2 <- pl + geom_histogram(aes(fill=factor(Pclass)),bins = 20,alpha=0.8)
+
+pl2
+```
+We see that most passengers were between 20 and 40 yrs old and that most of those passengers were 3rd class. However We see that the older someone was the more likely that they were first class.Next lets look at the fare of what the passengers payed
+$$\\[0.01in]$$
+
+```{r}
+pl <- ggplot(df.train) + aes(x=Fare)
+
+pl2 <- pl + geom_histogram(fill="hotpink",bins = 20,alpha=0.8)
+
+pl2
+```
+Makes sense that most people played a lower fare considering that most people were 3rd class. 
+$$\\[0.01in]$$
+Now lets go back to addressing all those missing age values. We could just fill in those values simply by getting the average age and for each missing value impute that. However, there is a smarter option. What if the missing age value was correlated to passenger class. We already know that 1st class tends to have older individuals than those in third class.
+```{r}
+pl <- ggplot(df.train) + aes(x=Pclass,y=Age)
+
+pl2 <- pl + geom_boxplot(aes(group=Pclass,fill=factor(Pclass),alpha=0.4))
+
+pl3 <- pl2 + scale_y_continuous(breaks = seq(min(0),max(80),by = 2))
+
+pl3 
+```
+$$\\[0.01in]$$
+Now lets create a function so that if a age value is N/A then it is replaced with the averge age value depedning on if that person was in 1st,2nd,or 3rd class
+```{r}
+ fill_age <- function(Pclass,Age){
+  out <- Age
+  for (i in 1:length(Age)) {
+    if (is.na(Age[i])) {
+      if (Pclass[i]==1) {
+        out[i] <- 37
+      }else if (Pclass[i]==2) {
+        out[i] <- 29
+      }else{
+        out[i] <- 24
+      }
+    }
+    else{
+      out[i] = Age[i]
+    }
+  }
+  return(out)
+}
+
+fixed_ages <- fill_age(df.train$Pclass,df.train$Age)
+
+df.train$Age <- fixed_ages
+
+missmap(df.train, main = "Age check", col = c("yellow","black"))
+```
+So we made a function to take replace any N/A values for Age and we see that now our whole data frame has no missing values.
+$$\\[0.01in]$$
+There are a lot of features of the data frame that we do NOT need though. Like PassengerId,name,ticket,cabin
+```{r}
+df.train <- select(df.train,-PassengerId,-Name,-Ticket,-Cabin)
+head(df.train,4)
+```
+
+$$\\[0.01in]$$
+We should also make some of the feature columns into Factors bc that way it is easier to train for our machine learning model. 
+```{r}
+df.train$Survived <- factor(df.train$Survived)
+df.train$Pclass <- factor(df.train$Pclass)
+df.train$SibSp <- factor(df.train$SibSp)
+
+str(df.train)
+```
+ $$\\[0.01in]$$
+### Training the logistic regression model
+```{r}
+log_model <- glm(Survived ~ ., family = binomial(link="logit"),data=df.train)
+
+summary(log_model)
+```
+This makes a logistic growth model which will predict survived based on every other feature using our df.train data. We see that some of the rows when we call the summary of log_model come out to ***. This indicates that is significantly significant to predicting the Survival. The lower the Pr(>|z|) or p value the more statistically significant. It seems that the Sex is the most statistically significant in determining the Survival
+
+$$\\[0.01in]$$
+Lets make a train test split just for ourselves so that we know if the train data is any good in the first place in predicting survived. 
+
+```{r}
+library(caTools)
+set.seed(101)
+split <- sample.split(df.train$Survived,SplitRatio = 0.7)
+final.train <- subset(df.train,split==TRUE)
+final.test <- subset(df.train,split==FALSE)
+
+final.log.model <- glm(Survived ~ .,family = binomial(link="logit"),data = final.train)
+
+fitted.probablities <- predict(final.log.model,final.test,type="response")
+fitted.result <- ifelse(fitted.probablities>0.5,1,0)
+missclass_error <- mean(fitted.result != final.test$Survived) 
+print(1-missclass_error)
+table(final.test$Survived,fitted.probablities>0.5)
+```
+So when we do a train/test random split then 80% of the data matches the original survived column. We also see a confusion matrix where the top right is a "False Positive" and the bottom left is a "False Negative"
+$$\\[0.01in]$$
+### Now let's use the actually test data for the Titanic.
+```{r}
+df.test <- read.csv("/Users/aditewari/Desktop/R-for-Data-Science-and-Machine-Learning/Machine Learning with R/titanic_test.csv")
+head(df.test)
+```
+Notice that There is no survived column in the df.test, so we will need to create one after using our machine learning model.Let's first address any missing data and any missing data
+$$\\[0.01in]$$
+```{r}
+missmap(df.test,main="Missing Data",col=c("yellow","black"))
+```
+It seems that we are missing quite a bit of age data. We can use the function we made before to fix this.
+$$\\[0.01in]$$
+```{r}
+fix_test_ages <- fill_age(df.test$Pclass,df.test$Age)
+df.test$Age <- fix_test_ages
+missmap(df.test,main="Missing Data",col=c("yellow","black"))
+```
+$$\\[0.01in]$$
+We for some reason have some piece of missing data for Fare so lets see what that is
+
+```{r}
+subset(df.test,is.na(df.test$Fare) == TRUE)
+```
+$$\\[0.01in]$$
+Lets replace this value so that it doesn't mess up the machine learning problem or cause unforeseen problems. We could actually find what the average fare is for Males who are in 3rd class and are above 40 yrs old. We are using these parameter bc Mr.Thomas who we don't have the fare for was one of the only people who was that old riding the 3rd class in the titanic
+```{r}
+df.test %>% filter(Sex=="male",Pclass==3,Age>40) %>% na.omit(df.test) %>% summarise(mean_fare = mean(Fare))
+```
+It seems that given the parameters Mr.Thomas would have payed approximately 11 dollars. Let's implement this
+$$\\[0.01in]$$
+```{r}
+df.test[is.na(df.test$Fare) == TRUE,]$Fare <- 11.33645
+anyNA(df.test)
+```
+$$\\[0.01in]$$
+Now lets try to match our data to the test data as much as possible
+```{r}
+df.test <- select(df.test,-PassengerId,-Name,-Ticket,-Cabin)
+df.test$Pclass <- factor(df.test$Pclass)
+df.test$SibSp <- factor(df.test$SibSp)
+```
+
+$$\\[0.01in]$$
+Now lets use the machine learning model to predict survived for the test data
+```{r}
+test <- predict(log_model,df.test,type="response")
+df.test$survived <- ifelse(test>0.5,1,0)
+```
+$$\\[0.01in]$$
+### That's it. We trained our model and predicted if a given indvidual survives or not.
